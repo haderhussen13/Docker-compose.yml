@@ -1,0 +1,24 @@
+       ┌───────────────┐
+       │  public_net   │
+       │ Traefik/Nginx │
+       └─────┬─────────┘
+             │
+             ▼
+       ┌───────────────┐
+       │ frontend_net  │
+       │ Frontend      │
+       │ Backend API   │
+       └─────┬─────────┘
+             │
+             ▼
+       ┌───────────────┐
+       │ backend_net   │
+       │ Backend API   │
+       │ Database      │
+       └───────────────┘
+       
+       ┌───────────────┐
+       │ monitoring_net│
+       │ Prometheus    │
+       │ Grafana       │
+       └───────────────┘
