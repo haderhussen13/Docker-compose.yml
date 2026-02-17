@@ -22,3 +22,9 @@
        │ Prometheus    │
        │ Grafana       │
        └───────────────┘
+
+docker network create -d overlay --attachable --opt encrypted public_net
+docker network create -d overlay --attachable --opt encrypted frontend_net
+docker network create -d overlay --attachable --opt encrypted backend_net
+docker network create -d overlay --opt encrypted monitoring_net
+
