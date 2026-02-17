@@ -2,54 +2,186 @@ version: "3.9"
 
 services:
 
+  # -------------------------
+  # PostgreSQL Database
+  # -------------------------
   postgres:
-    image: postgres:15
+    image: postgres:15                 # Official Postgres image
     environment:
-      POSTGRES_DB: appdb
+      POSTGRES_DB: appdb               # Default database created at container startup
     secrets:
-      - db_user
-      - db_password
+      - db_user                        # External secret for DB username
+      - db_password                    # External secret for DB password
     networks:
-      - backend
+      - backend                        # Connect to backend service network only
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data # Persist database data
     deploy:
-      replicas: 1
+      mode: replicated                  # Ensure DB task is managed by Swarm
+      replicas: 1                       # Single instance (stateful DB, replication requires clustering)
+      update_config:
+        parallelism: 1                  # Update one replica at a time
+        delay: 10s                      # Wait 10 seconds between updates
+        failure_action: rollback        # Roll back automatically if update fails
+                                         # Prevents data service from being left in a broken state
+      rollback_config:
+        parallelism: 1                  # Rollback one replica at a time
+        delay: 5s                       # Delay between rollback steps
+      placement:
+        preferences:
+          - spread: node.id             # Spread task across nodes for resilience
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      logging:
+        driver: json-file
+        options:
+          max-size: "10m"
+          max-file: "3"
 
+  # -------------------------
+  # Redis Cache
+  # -------------------------
   redis:
     image: redis:7
     networks:
-      - backend
+      - backend                         # Only backend can access cache
     deploy:
-      replicas: 1
+      mode: replicated
+      replicas: 1                        # Single instance for simplicity
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback         # Rollback if update fails
+      rollback_config:
+        parallelism: 1
+        delay: 5s
+      placement:
+        preferences:
+          - spread: node.id
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+        reservations:
+          cpus: "0.10"
+          memory: 128M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      logging:
+        driver: json-file
+        options:
+          max-size: "10m"
+          max-file: "3"
 
+  # -------------------------
+  # Backend API Service
+  # -------------------------
   backend:
     image: nginx:alpine
     networks:
       - backend
       - frontend
     deploy:
-      replicas: 2
+      mode: replicated
+      replicas: 2                         # Multiple instances for high availability
+                                           # More replicas improve redundancy/load distribution
+      update_config:
+        parallelism: 2                    # Update 2 tasks at a time during service updates
+        delay: 10s                        # Wait 10s between updating batches
+        failure_action: rollback          # Roll back automatically if update fails
+                                           # Ensures service stays stable
+      rollback_config:
+        parallelism: 1                    # Rollback one task at a time
+        delay: 5s                         # Prevents cascading failures during rollback
+      placement:
+        preferences:
+          - spread: node.id               # Spread backend tasks across available nodes
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      logging:
+        driver: json-file
+        options:
+          max-size: "10m"
+          max-file: "3"
 
+  # -------------------------
+  # Frontend Service
+  # -------------------------
   frontend:
     image: nginx:alpine
     networks:
-      - frontend
-      - public
+      - frontend                         # Connect to backend service
+      - public                           # Expose externally
     deploy:
-      replicas: 2
+      mode: replicated
+      replicas: 2                         # Multiple instances for load balancing and redundancy
+      update_config:
+        parallelism: 2                    # Update 2 tasks at a time
+        delay: 10s                        # Wait 10 seconds between updates
+        failure_action: rollback          # Roll back automatically if update fails
+      rollback_config:
+        parallelism: 1                    # Rollback one task at a time
+        delay: 5s
+      placement:
+        preferences:
+          - spread: node.id               # Spread frontend tasks across nodes
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      logging:
+        driver: json-file
+        options:
+          max-size: "10m"
+          max-file: "3"
 
+# -------------------------
+# Volumes
+# -------------------------
 volumes:
-  pgdata:
+  pgdata:                               # Persistent storage for Postgres
 
+# -------------------------
+# Networks
+# -------------------------
 networks:
   public:
-    external: true
+    external: true                      # External overlay network for frontend exposure
   frontend:
-    external: true
+    external: true                      # Frontend/backend communication
   backend:
-    external: true
+    external: true                      # Internal backend/database network
 
+# -------------------------
+# Secrets
+# -------------------------
 secrets:
   db_user:
     external: true
