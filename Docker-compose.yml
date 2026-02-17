@@ -1,0 +1,57 @@
+version: "3.9"
+
+services:
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: appdb
+    secrets:
+      - db_user
+      - db_password
+    networks:
+      - backend
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    deploy:
+      replicas: 1
+
+  redis:
+    image: redis:7
+    networks:
+      - backend
+    deploy:
+      replicas: 1
+
+  backend:
+    image: nginx:alpine
+    networks:
+      - backend
+      - frontend
+    deploy:
+      replicas: 2
+
+  frontend:
+    image: nginx:alpine
+    networks:
+      - frontend
+      - public
+    deploy:
+      replicas: 2
+
+volumes:
+  pgdata:
+
+networks:
+  public:
+    external: true
+  frontend:
+    external: true
+  backend:
+    external: true
+
+secrets:
+  db_user:
+    external: true
+  db_password:
+    external: true
